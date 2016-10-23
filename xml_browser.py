@@ -6,15 +6,94 @@ xml_browser
 
 import os
 import sys
-from collections import deque
-from xml.etree import ElementTree as etree
+from collections import deque, defaultdict
+from xml.etree import ElementTree as ET
 
 class Assembler():
     """
     Assemble XML file based on a directory structure.
     Class associated with ``xml_browser assemble`` command
     """
-    pass
+
+    class InvalidName(Exception):
+        "Raised when a directory has invalid name."
+        pass
+
+    def __init__(self, root_dir):
+        self.root_dir = root_dir
+        self.root_element = None
+        # lookup element for given path
+        self.path_lookup_elem = dict()
+        # keep element and set of its children, so we can sort them after processing all
+        self.relations_dict = defaultdict(set)
+
+    def assemble(self):
+        """
+        Traverse ``self.root_dir`` directory and assemble XML document.
+        """
+        # iterate over every directory in a structure.
+        for element_path, dirnames, filenames in os.walk(self.root_dir):
+            # normalize:
+            element_path = os.path.normpath(element_path)
+            element_dirname = os.path.basename(element_path)
+            try:
+                tag, order = element_dirname.rsplit(',', 1)
+            except ValueError:
+                tag = element_dirname
+                order = 0.
+            else:
+                try: # cast string to float
+                    order = float(order)
+                except ValueError:
+                    raise Assembler.InvalidName("Non-numeric order in '%s'" % element_path)
+            try:
+                element = ET.Element(tag)
+                # check if tag is valid
+                ET.fromstring(ET.tostring(element))
+            except ET.ParseError:
+                raise Assembler.InvalidName("'%s' is not a valid directory name \
+                    (full path: %s)." % (element_dirname, element_path))
+            # save element in lookup dict
+            self.path_lookup_elem[element_path] = element
+
+            # try reading meta
+            try:
+                with open(os.path.join(element_path, '0-attributes'), mode='r') as attributes:
+                    raw_attrib = attributes.read()
+            except FileNotFoundError:
+                pass
+            else:
+                for attribute in raw_attrib.strip().splitlines():
+                    a_name, a_val = attribute.split('=', 1)
+                    element.attrib[a_name.strip()] = a_val.strip()
+            try:
+                with open(os.path.join(element_path, '0-text'), mode='r') as text:
+                    raw_text = text.read()
+            except FileNotFoundError:
+                pass
+            else:
+                element.text = raw_text.strip()
+            try:
+                with open(os.path.join(element_path, '0-tail'), mode='r') as tail:
+                    raw_tail = tail.read()
+            except FileNotFoundError:
+                pass
+            else:
+                element.tail = raw_tail.strip()
+
+            # establish relations
+            if self.root_element is None:
+                self.root_element = element
+            else:
+                parent_path = os.path.dirname(element_path)
+                parent = self.path_lookup_elem[parent_path]
+                self.relations_dict[parent].add((order, element))
+
+        # order and attach elements
+        for element, children in self.relations_dict.items():
+            children_sort = sorted(children)
+            # get rid of order
+            element.extend(child[1] for child in children_sort)
 
 class Makedir():
     """
@@ -27,7 +106,8 @@ class Makedir():
         Overrides deque's append method and allows setting options for directories and
         files creation.
         """
-        def __init__(self, iterable=(), maxlen=None, ds_options=None): # py2 cannot into keyword only args
+        def __init__(self, iterable=(), maxlen=None, ds_options=None):
+            # py2 cannot into keyword-only args
             """
             Call deque's init and set options for Dirstack.
             """
@@ -91,7 +171,7 @@ class Makedir():
         Read XML document from standard input.
         """
         self.xml_string = sys.stdin.read()
-        self.xml_etree = etree.fromstring(self.xml_string)
+        self.xml_etree = ET.fromstring(self.xml_string)
 
     def create_dirtree(self):
         """
