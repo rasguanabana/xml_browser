@@ -6,6 +6,7 @@ xml_browser
 
 import os
 import sys
+import re
 from collections import deque, defaultdict
 from xml.etree import ElementTree as ET
 
@@ -37,71 +38,109 @@ class Assembler():
             # normalize:
             element_path = os.path.normpath(walk_tuple[0])
             element_dirname = os.path.basename(element_path)
+            # get tag and extract ordering information
             try:
-                tag, order = element_dirname.rsplit(',', 1)
+                tag, order = element_dirname.split(',', 1)
             except ValueError:
                 tag = element_dirname
-                order = 0.
+                order = (0.,)
             else:
-                try: # cast string to float
-                    order = float(order)
+                try: # convert string to tuple of floats
+                    order = tuple(float(o) for o in order.split(','))
                 except ValueError:
-                    raise Assembler.InvalidName("Non-numeric order in '%s'" % element_path)
+                    raise Assembler.InvalidName(
+                        "Non-numeric order component in '%s'" % element_path
+                    )
+            # create element. For now it is unattached to anything
             try:
                 element = ET.Element(tag)
                 # check if tag is valid
                 ET.fromstring(ET.tostring(element))
             except ET.ParseError:
-                raise Assembler.InvalidName("'%s' is not a valid directory name \
-                    (full path: %s)." % (element_dirname, element_path))
-            # save element in lookup dict
+                raise Assembler.InvalidName(
+                    "'%s' is not a valid directory name" % element_path
+                )
+            # save element in lookup dict under its path in dir structure
             self.path_lookup_elem[element_path] = element
 
             # try reading meta
             try:
                 with open(os.path.join(element_path, '0-attributes'), mode='r') as attributes:
                     raw_attrib = attributes.read()
-            except FileNotFoundError:
+            except IOError:
                 pass
             else:
-                for attribute in raw_attrib.strip().splitlines():
-                    a_name, a_val = attribute.split('=', 1)
-                    element.attrib[a_name.strip()] = a_val.strip()
-            try:
-                with open(os.path.join(element_path, '0-text'), mode='r') as text:
-                    raw_text = text.read()
-            except FileNotFoundError:
-                pass
-            else:
-                element.text = raw_text.strip()
-            try:
-                with open(os.path.join(element_path, '0-tail'), mode='r') as tail:
-                    raw_tail = tail.read()
-            except FileNotFoundError:
-                pass
-            else:
-                element.tail = raw_tail.strip()
+                for attribute in raw_attrib.splitlines():
+                    try:
+                        a_name, a_val = attribute.split('=', 1)
+                    except ValueError:
+                        # FIXME? this will just ignore misformatted lines in attrib file
+                        # with no warning, but sth like this is needed for empty lines
+                        pass
+                    else:
+                        element.attrib[a_name.strip()] = a_val
+            for meta in ('text', 'tail'):
+                try:
+                    # reading whitespaces. For easier editing, text/tail is saved to 2 files.
+                    # .text.ws/.tail.ws file contains whitespaces and a 'x' mark, where
+                    # 0-text/0-tail file contents should be substituted.
+                    with open(os.path.join(element_path, '.%s.ws' % meta), mode='r') as file_:
+                        raw_meta_ws = file_.read()
+                except IOError:
+                    raw_meta_ws = ''
+                try:
+                    # reading text/tail
+                    with open(os.path.join(element_path, '0-' + meta), mode='r') as file_:
+                        raw_meta = file_.read()
+                except IOError:
+                    raw_meta = ''
+
+                if raw_meta_ws:
+                    # discard whitespaces in main file if .ws file is not empty
+                    raw_meta = raw_meta.strip()
+
+                # if ws file has no substitution mark and yet there is some text
+                # to insert, then we need to guess where 'x' should be put
+                if raw_meta and not raw_meta_ws.strip():
+                    guess_x = raw_meta_ws.rfind(os.linesep)
+                    if guess_x >= 0:
+                        raw_meta_ws = raw_meta_ws[:guess_x] + 'x' + raw_meta_ws[guess_x:]
+                    else: # no newlines found, discard whitespaces
+                        raw_meta_ws = 'x'
+
+                to_save = re.sub(r'\b[\s\S]*\b', raw_meta, raw_meta_ws)
+                setattr(element, meta, to_save)
 
             # establish relations
             if self.root_element is None:
+                # this is the first element being processed, so it must be root
                 self.root_element = element
             else:
+                # find parent element by using parent's path
                 parent_path = os.path.dirname(element_path)
                 parent = self.path_lookup_elem[parent_path]
+                # we can't attach child to parent yet, because we need to order siblings first
+                # all siblings are added to a set corresponding to a parent
                 self.relations_dict[parent].add((order, element))
 
-        # order and attach elements
+        # order and attach elements - this loop create whole element structure
         for element, children in self.relations_dict.items():
-            children_sort = sorted(children)
-            # get rid of order
-            element.extend(child[1] for child in children_sort)
+            # children are sorted by the order tuple
+            children_sorted = sorted(children)
+            # extract only ET.Elements from above list
+            element.extend(child[1] for child in children_sorted)
 
     def write(self):
         """
-        Write XML document to standard output.
+        Write XML document on standard output.
         """
-        self.xml_string = ET.tostring(self.root_element).decode(sys.getdefaultencoding())
+        self.xml_string = ET.tostring(self.root_element)
+        try:
+            self.xml_string = self.xml_string.decode(sys.getdefaultencoding())
+        except AttributeError:
+            pass
         sys.stdout.write(self.xml_string)
+        # everyone likes a newline instead of junk before prompt, right?
         sys.stdout.write(os.linesep)
 
 class Makedir():
@@ -123,14 +162,17 @@ class Makedir():
             super(Makedir.Dirstack, self).__init__(iterable, maxlen)
             #opts TODO
             self.real_dirname = dict()
+            # Extracts leading whitespaces, text and trailing whitespaces:
+            self.ws_regexp = re.compile(r'^(\s*)([\s\S]*\S)?(\s*)$')
 
         def append(self, element):
             """
             Overriden append. With every new element pushed on stack, a new directory
             in tree is being created.
             """
+            # TODO - method is too bit - split into more functions
             try:
-                # if element has siblings, then we might need to be able to keep their order
+                # if element has siblings, then we need to be able to keep their order
                 siblings = tuple(self[-1])
             except IndexError: # this will happen for root element
                 siblings = (element,)
@@ -141,32 +183,41 @@ class Makedir():
             if len(siblings) > 1:
                 uniq_suffix = ',' + str(siblings.index(element))
             else:
+                # no need for suffix if element is the only child
                 uniq_suffix = ''
-
+            # keep real directory name for element
             self.real_dirname[element] = element.tag + uniq_suffix
 
+            # from now on we need element on stack, so we call original append
             super(Makedir.Dirstack, self).append(element)
 
+            # get real directory names and join them into full relative path
             tag_chain = tuple(self.real_dirname[elem] for elem in self)
             element_path = os.path.join(*tag_chain)
             # directory creation
             os.mkdir(element_path)
             # meta files
-            try:
-                e_text = element.text.strip()
-            except AttributeError:
-                e_text = None
-            if e_text:
-                with open(os.path.join(element_path, '0-text'), mode='w+') as text:
-                    text.write(e_text + os.linesep)
-            try:
-                e_tail = element.tail.strip()
-            except AttributeError:
-                e_tail = None
-            if e_tail:
-                with open(os.path.join(element_path, '0-tail'), mode='w+') as tail:
-                    tail.write(e_tail + os.linesep)
+            for meta in ('text', 'tail'):
+                e_meta = getattr(element, meta)
+                try:
+                    # get leading whitespaces (1), actual text (2), and trailing whitespaces (3)
+                    meta_re = self.ws_regexp.match(e_meta)
+                except TypeError: # e_meta is None
+                    to_write = None
+                    to_write_ws = None
+                else:
+                    to_write = meta_re.group(2) # actual text
+                    # record whitespaces and mark where text should be substituted.
+                    # do not place mark anywhere if text is empty
+                    to_write_ws = meta_re.group(1) + ('x' if to_write else '') + meta_re.group(3)
+                if to_write:
+                    with open(os.path.join(element_path, '0-' + meta), mode='w+') as file_:
+                        file_.write(to_write + os.linesep)
+                if to_write_ws:
+                    with open(os.path.join(element_path, '.%s.ws' % meta), mode='w+') as file_:
+                        file_.write(to_write_ws)
             if element.attrib:
+                # glue keys and values with '=' and then save each pair as seperate lines in file
                 e_attrib = os.linesep.join(k + '=' + v for k, v in element.attrib.items())
                 with open(os.path.join(element_path, '0-attributes'), mode='w+') as attributes:
                     attributes.write(e_attrib + os.linesep)
@@ -195,20 +246,12 @@ class Makedir():
         for element in element_iterator: # loop starts from 2nd element of iterator
             while element not in stack[-1]: # find parent on stack
                 stack.pop()
-            stack.append(element) # push current element on stack behind its parent
+            # push current element on stack behind its parent
+            # append does the whole magic (in call on root element before loop too)
+            stack.append(element)
 
 if __name__ == '__main__':
-    #argument parsing
-    # - assemble
-    # - makedir
-    #   --metadata
-    #       none - do not create any special directories/files (attributes, content, namespace) - this creates only directories
-    #       attributes - create 0-attributes for every node
-    #       content - create 0-content for every node
-    #       ...
-    #       full - create each kind of special directories/files for every node
-    #   --create-mode-attribute - specify the name of attribute used to tell Makedir what permissions should be set for a directory
-    #   --regular-file-attribute - ... value of this attr will be file extension (can be none)
+    # simple arg parsing. this needs to be rewritten, but now serves well for demo version
     if sys.argv[1] == 'assemble':
         directory = sys.argv[2]
         asm = Assembler(directory)
