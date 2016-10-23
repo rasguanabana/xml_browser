@@ -26,15 +26,16 @@ class Assembler():
         self.path_lookup_elem = dict()
         # keep element and set of its children, so we can sort them after processing all
         self.relations_dict = defaultdict(set)
+        self.xml_string = None
 
     def assemble(self):
         """
         Traverse ``self.root_dir`` directory and assemble XML document.
         """
         # iterate over every directory in a structure.
-        for element_path, dirnames, filenames in os.walk(self.root_dir):
+        for walk_tuple in os.walk(self.root_dir):
             # normalize:
-            element_path = os.path.normpath(element_path)
+            element_path = os.path.normpath(walk_tuple[0])
             element_dirname = os.path.basename(element_path)
             try:
                 tag, order = element_dirname.rsplit(',', 1)
@@ -94,6 +95,14 @@ class Assembler():
             children_sort = sorted(children)
             # get rid of order
             element.extend(child[1] for child in children_sort)
+
+    def write(self):
+        """
+        Write XML document to standard output.
+        """
+        self.xml_string = ET.tostring(self.root_element).decode(sys.getdefaultencoding())
+        sys.stdout.write(self.xml_string)
+        sys.stdout.write(os.linesep)
 
 class Makedir():
     """
@@ -200,4 +209,14 @@ if __name__ == '__main__':
     #       full - create each kind of special directories/files for every node
     #   --create-mode-attribute - specify the name of attribute used to tell Makedir what permissions should be set for a directory
     #   --regular-file-attribute - ... value of this attr will be file extension (can be none)
-    pass
+    if sys.argv[1] == 'assemble':
+        directory = sys.argv[2]
+        asm = Assembler(directory)
+        asm.assemble()
+        asm.write()
+    elif sys.argv[1] == 'makedir':
+        md = Makedir()
+        md.read()
+        md.create_dirtree()
+    else:
+        exit(1)
