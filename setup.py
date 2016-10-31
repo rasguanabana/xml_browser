@@ -1,7 +1,7 @@
 from __future__ import with_statement
 from setuptools import setup
 
-version = '0.99.dev1'
+version = '0.99.dev2'
 
 with open("README.rst", mode='r') as fp:
     long_desc = fp.read()
