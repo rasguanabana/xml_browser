@@ -4,6 +4,8 @@
 
 xml_browser converts arbitrary XML documents to a directory structure. This enables user to browse and edit XML in a simple and (as the author hopes) intuitive way.
 
+This utility was written in Python 3, but is intended to be portable. It was just quickly tested under Python 2, so it may be not working in older versions.
+
 Why?
 ====
 
