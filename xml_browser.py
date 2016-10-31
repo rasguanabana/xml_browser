@@ -40,13 +40,15 @@ class Assembler():
             element_dirname = os.path.basename(element_path)
             # get tag and extract ordering information
             try:
-                tag, order = element_dirname.split(',', 1)
+                tag, order_s = element_dirname.split(',', 1)
             except ValueError:
                 tag = element_dirname
                 order = (0.,)
             else:
+                if not order_s:
+                    order_s = '0'
                 try: # convert string to tuple of floats
-                    order = tuple(float(o) for o in order.split(','))
+                    order = tuple(float(o) for o in order_s.split(','))
                 except ValueError:
                     raise Assembler.InvalidName(
                         "Non-numeric order component in '%s'" % element_path
@@ -78,7 +80,11 @@ class Assembler():
                         # with no warning, but sth like this is needed for empty lines
                         pass
                     else:
-                        element.attrib[a_name.strip()] = a_val
+                        a_name = a_name.strip()
+                        if re.match(r'\S*\s+\S*', a_name):
+                            raise Assembler.InvalidName("Attribute name '%s' contains a whitespace"
+                                                        % a_name)
+                        element.attrib[a_name] = a_val
             for meta in ('text', 'tail'):
                 try:
                     # reading whitespaces. For easier editing, text/tail is saved to 2 files.
@@ -180,11 +186,7 @@ class Makedir():
             assert element in siblings
 
             # add suffix to keep order of siblings
-            if len(siblings) > 1:
-                uniq_suffix = ',' + str(siblings.index(element))
-            else:
-                # no need for suffix if element is the only child
-                uniq_suffix = ''
+            uniq_suffix = ',' + str(siblings.index(element))
             # keep real directory name for element
             self.real_dirname[element] = element.tag + uniq_suffix
 
