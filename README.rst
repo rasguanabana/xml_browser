@@ -164,9 +164,9 @@ The ``assemble``
 
 When you're done editting, you can assemble the directory tree to a XML document. Just call::
 
-    xml_browser.py assemble documentRoot > result.xml
+    xml_browser.py assemble documentRoot,0 > result.xml
 
-Like with ``makedir``, result is written on standard output, so you can pipe it to any command or redirect to a file.
+You need to provide root directory of you structure after ``assemble``. Like with ``makedir``, result is written on standard output, so you can pipe it to any command or redirect to a file.
 
 Planned features
 ================
