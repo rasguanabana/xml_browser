@@ -1,0 +1,11 @@
+.*
+!/.gitignore
+__pycache__
+*.pyc
+*.bak
+*.swp
+doc/_build
+doc/_static
+dist
+build
+*.egg-info
