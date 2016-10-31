@@ -252,7 +252,7 @@ class Makedir():
             # append does the whole magic (in call on root element before loop too)
             stack.append(element)
 
-if __name__ == '__main__':
+def main():
     # simple arg parsing. this needs to be rewritten, but now serves well for demo version
     if sys.argv[1] == 'assemble':
         directory = sys.argv[2]
@@ -265,3 +265,6 @@ if __name__ == '__main__':
         md.create_dirtree()
     else:
         exit(1)
+
+if __name__ == '__main__':
+    main()
