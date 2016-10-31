@@ -6,6 +6,8 @@ xml_browser converts arbitrary XML documents to a directory structure. This enab
 
 This utility was written in Python 3, but is intended to be portable. It was just quickly tested under Python 2, so it may be not working in older versions.
 
+.. contents:: Table of contents
+
 Why?
 ====
 
@@ -139,7 +141,7 @@ As you already know, we'll get following subdirectories inside `reallySimple,0` 
 
     a,0  a,1  b,2  a,3  c,4  c,5
 
-Easy. But how to add a node? It's obvious how to append a node at the end (e.g. ``mkdir new,6``). But how to insert it between some existing nodes? Time for some theory.
+Easy. But how to add a node? It's obvious how to append a node at the end (e.g. ``mkdir new,6``, you may want to move `0-tail` to the new last element). But how to insert it between some existing nodes? Time for some theory.
 
 Numbers at the time of assembling directory structure into a XML document are used solely for ordering, so it does not matter if you have, let's say, `a,0`, `a,1`, `over,2` or something like `a,-100`, `a,4.5` and `over,9000` - the result will be exactly the same. You can specify any float.
 
@@ -167,3 +169,8 @@ Planned features
 - Fancy formatting/generating options
 - Options for creating dirtree - creation mode, handling already existing tree.
 - Waiting for your suggestions!
+
+License
+=======
+
+MIT (c) Adrian Włosiak 2016
