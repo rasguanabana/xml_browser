@@ -176,7 +176,7 @@ class Makedir():
             Overriden append. With every new element pushed on stack, a new directory
             in tree is being created.
             """
-            # TODO - method is too bit - split into more functions
+            # TODO - method is too big - split into more functions
             try:
                 # if element has siblings, then we need to be able to keep their order
                 siblings = tuple(self[-1])
