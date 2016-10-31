@@ -2,7 +2,11 @@
 
 Note::
 
-    This is a demo version. I'm publishing it early, so I can get feedback from you. If some people find this utility useful, I'll keep developing (hopefully with some help :)). Otherwise, it will just stay here as a fun idea of mine that I will maybe play around with. As this is a demo version, it lacks quite some features I'm willing to add some day (you can find the list below). Please open an issue if you notice any misconception - I'd like to eliminate them as soon as possible.
+    This is a demo version. I'm publishing it early, so I can get feedback from you. If some people find this
+    utility useful, I'll keep developing (hopefully with some help :)). Otherwise, it will just stay here as
+    a fun idea of mine that I will maybe play around with. As this is a demo version, it lacks quite some
+    features I'm willing to add some day (you can find the list below). Please open an issue if you notice any
+    misconception - I'd like to eliminate them as soon as possible.
 
 xml_browser converts arbitrary XML documents to a directory structure. This enables user to browse and edit XML in a simple and (as the author hopes) intuitive way.
 
