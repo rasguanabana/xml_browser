@@ -1,5 +1,7 @@
 **xml_browser.py** - Edit XML documents as a directory structure
 
+.. image:: http://i.imgur.com/QuMBiuB.gif
+
 Note::
 
     This is a demo version. I'm publishing it early, so I can get feedback from you. If some people find this
