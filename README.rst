@@ -1,6 +1,7 @@
 **xml_browser.py** - Edit XML documents as a directory structure
 
 .. image:: http://i.imgur.com/QuMBiuB.gif
+   :align: center
 
 Note::
 
